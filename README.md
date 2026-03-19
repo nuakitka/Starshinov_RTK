@@ -190,6 +190,7 @@ docker exec ansible curl http://lb1:8404/metrics | head
 ```bash
 docker exec ansible curl http://backend1:9100/metrics | head
 ```
+<img width="2854" height="1806" alt="image" src="https://github.com/user-attachments/assets/828aaac1-bc4c-4d35-b10b-4a4308aa1386" />
 
 Проверить datasource и dashboard через Grafana UI:
 
@@ -197,13 +198,6 @@ docker exec ansible curl http://backend1:9100/metrics | head
 2. Войти под `admin/admin`
 3. Открыть `Explore` и выбрать datasource `VictoriaMetrics`
 4. Открыть dashboard `HA Platform Overview`
-
-## Скриншоты
-
-Каталог [docs/README.md](/Users/nuakitka/Documents/New%20project/docs/README.md) уже подготовлен под фактические скриншоты Grafana. После первого запуска стенда добавьте туда:
-
-- `docs/grafana-overview.png`
-- `docs/grafana-explore.png`
 
 ## Структура проекта
 
