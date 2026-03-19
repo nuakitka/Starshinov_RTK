@@ -1,0 +1,94 @@
+---
+- name: Configure VictoriaMetrics scrape targets and Grafana
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    grafana_url: http://grafana:3000
+    grafana_user: admin
+    grafana_password: admin
+    victoria_metrics_url: http://victoriametrics:8428
+  tasks:
+    - name: Render VictoriaMetrics scrape config
+      ansible.builtin.template:
+        src: templates/promscrape.yml.j2
+        dest: /monitoring/victoriametrics/promscrape.yml
+        mode: "0644"
+
+    - name: Wait for VictoriaMetrics API
+      ansible.builtin.uri:
+        url: "{{ victoria_metrics_url }}/health"
+        method: GET
+        status_code: 200
+      register: vm_health
+      retries: 20
+      delay: 3
+      until: vm_health.status == 200
+
+    - name: Wait for Grafana login page
+      ansible.builtin.uri:
+        url: "{{ grafana_url }}/login"
+        method: GET
+        status_code: 200
+      register: grafana_login
+      retries: 30
+      delay: 3
+      until: grafana_login.status == 200
+
+    - name: Give Grafana a moment to finish startup migrations
+      ansible.builtin.pause:
+        seconds: 10
+
+    - name: Check whether VictoriaMetrics datasource already exists
+      ansible.builtin.uri:
+        url: "{{ grafana_url }}/api/datasources/uid/victoriametrics"
+        method: GET
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: true
+        status_code:
+          - 200
+          - 404
+      register: datasource_lookup
+
+    - name: Create VictoriaMetrics datasource
+      ansible.builtin.uri:
+        url: "{{ grafana_url }}/api/datasources"
+        method: POST
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          name: VictoriaMetrics
+          uid: victoriametrics
+          type: prometheus
+          access: proxy
+          url: "{{ victoria_metrics_url }}"
+          isDefault: true
+          basicAuth: false
+          editable: true
+          jsonData:
+            httpMethod: POST
+        status_code:
+          - 200
+          - 409
+      when: datasource_lookup.status == 404
+
+    - name: Import Grafana dashboard
+      ansible.builtin.uri:
+        url: "{{ grafana_url }}/api/dashboards/db"
+        method: POST
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          dashboard: "{{ lookup('file', '/ansible/files/grafana-dashboard.json') | from_json }}"
+          folderId: 0
+          overwrite: true
+        status_code: 200

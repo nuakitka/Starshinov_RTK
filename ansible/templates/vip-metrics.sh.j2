@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+OUT="/var/lib/node_exporter/textfile_collector/vip.prom"
+VIP="{{ vip_address }}/24"
+NODE="{{ inventory_hostname }}"
+
+while true; do
+  if ip -4 addr show dev eth0 | grep -q "$VIP"; then
+    OWNER=1
+    MASTER=1
+    BACKUP=0
+  else
+    OWNER=0
+    MASTER=0
+    BACKUP=1
+  fi
+
+  cat > "$OUT" <<EOF
+lb_vip_owner{node="$NODE"} $OWNER
+lb_role{node="$NODE",role="master"} $MASTER
+lb_role{node="$NODE",role="backup"} $BACKUP
+EOF
+
+  sleep 5
+done

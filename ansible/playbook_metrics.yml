@@ -1,0 +1,85 @@
+---
+- name: Configure node-level metrics exporters
+  hosts: app_nodes
+  become: true
+  tasks:
+    - name: Install prometheus node exporter
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: true
+
+    - name: Ensure textfile collector directory exists
+      ansible.builtin.file:
+        path: /var/lib/node_exporter/textfile_collector
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Configure node exporter under supervisor
+      ansible.builtin.template:
+        src: templates/node-exporter.conf.j2
+        dest: /etc/supervisor/conf.d/node-exporter.conf
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Deploy VIP ownership metric script on load balancers
+      ansible.builtin.template:
+        src: templates/vip-metrics.sh.j2
+        dest: /usr/local/bin/vip-metrics.sh
+        owner: root
+        group: root
+        mode: "0755"
+      when: "'loadbalancers' in group_names"
+
+    - name: Configure VIP metric collector under supervisor
+      ansible.builtin.copy:
+        dest: /etc/supervisor/conf.d/vip-metrics.conf
+        content: |
+          [program:vip-metrics]
+          command=/usr/local/bin/vip-metrics.sh
+          autostart=true
+          autorestart=true
+          stdout_logfile=/dev/stdout
+          stdout_logfile_maxbytes=0
+          stderr_logfile=/dev/stderr
+          stderr_logfile_maxbytes=0
+        owner: root
+        group: root
+        mode: "0644"
+      when: "'loadbalancers' in group_names"
+
+    - name: Reload supervisor after metrics changes
+      ansible.builtin.command: supervisorctl reread
+      changed_when: false
+
+    - name: Apply metrics supervisor configuration
+      ansible.builtin.command: supervisorctl update
+      changed_when: false
+
+    - name: Restart node exporter
+      ansible.builtin.command: supervisorctl restart node-exporter
+      register: node_exporter_restart
+      changed_when: node_exporter_restart.rc == 0
+      failed_when: false
+
+    - name: Start node exporter if not yet loaded
+      ansible.builtin.command: supervisorctl start node-exporter
+      when: node_exporter_restart.rc != 0
+      changed_when: true
+
+    - name: Restart VIP metric collector
+      ansible.builtin.command: supervisorctl restart vip-metrics
+      when: "'loadbalancers' in group_names"
+      register: vip_metrics_restart
+      changed_when: vip_metrics_restart.rc == 0
+      failed_when: false
+
+    - name: Start VIP metric collector if not yet loaded
+      ansible.builtin.command: supervisorctl start vip-metrics
+      when:
+        - "'loadbalancers' in group_names"
+        - vip_metrics_restart.rc != 0
+      changed_when: true

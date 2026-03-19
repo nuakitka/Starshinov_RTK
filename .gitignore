@@ -1,0 +1,5 @@
+monitoring/grafana/data/*
+monitoring/grafana/data/.gitkeep
+monitoring/victoriametrics/data/*
+monitoring/victoriametrics/data/.gitkeep
+.DS_Store

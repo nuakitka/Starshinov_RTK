@@ -1,0 +1,71 @@
+---
+- name: Configure backend nodes
+  hosts: backends
+  become: true
+  tasks:
+    - name: Install nginx for backend response pages
+      ansible.builtin.apt:
+        name: nginx-light
+        state: present
+        update_cache: true
+
+    - name: Deploy backend nginx site
+      ansible.builtin.template:
+        src: templates/backend-default.j2
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Ensure web root exists
+      ansible.builtin.file:
+        path: /var/www/html
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: "0755"
+
+    - name: Deploy backend landing page
+      ansible.builtin.copy:
+        dest: /var/www/html/index.html
+        content: |
+          <!doctype html>
+          <html lang="ru">
+          <head>
+            <meta charset="utf-8">
+            <title>{{ backend_label }}</title>
+          </head>
+          <body>
+            <h1>{{ backend_label }}</h1>
+          </body>
+          </html>
+        owner: www-data
+        group: www-data
+        mode: "0644"
+
+    - name: Configure backend nginx under supervisor
+      ansible.builtin.template:
+        src: templates/backend-supervisor.conf.j2
+        dest: /etc/supervisor/conf.d/backend-nginx.conf
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload supervisor after backend changes
+      ansible.builtin.command: supervisorctl reread
+      changed_when: false
+
+    - name: Apply backend supervisor configuration
+      ansible.builtin.command: supervisorctl update
+      changed_when: false
+
+    - name: Restart backend nginx
+      ansible.builtin.command: supervisorctl restart backend-nginx
+      register: backend_restart
+      changed_when: backend_restart.rc == 0
+      failed_when: false
+
+    - name: Start backend nginx if not yet loaded
+      ansible.builtin.command: supervisorctl start backend-nginx
+      when: backend_restart.rc != 0
+      changed_when: true

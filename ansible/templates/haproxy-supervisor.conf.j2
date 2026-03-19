@@ -1,0 +1,8 @@
+[program:haproxy]
+command=/bin/sh -c 'mkdir -p /run/haproxy && exec /usr/sbin/haproxy -W -db -f /etc/haproxy/haproxy.cfg'
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0

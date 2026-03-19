@@ -1,0 +1,45 @@
+---
+- name: Configure HAProxy load balancers
+  hosts: loadbalancers
+  become: true
+  tasks:
+    - name: Install haproxy
+      ansible.builtin.apt:
+        name: haproxy
+        state: present
+        update_cache: true
+
+    - name: Deploy haproxy config
+      ansible.builtin.template:
+        src: templates/haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Configure haproxy under supervisor
+      ansible.builtin.template:
+        src: templates/haproxy-supervisor.conf.j2
+        dest: /etc/supervisor/conf.d/haproxy.conf
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload supervisor after haproxy changes
+      ansible.builtin.command: supervisorctl reread
+      changed_when: false
+
+    - name: Apply haproxy supervisor configuration
+      ansible.builtin.command: supervisorctl update
+      changed_when: false
+
+    - name: Restart haproxy
+      ansible.builtin.command: supervisorctl restart haproxy
+      register: haproxy_restart
+      changed_when: haproxy_restart.rc == 0
+      failed_when: false
+
+    - name: Start haproxy if not yet loaded
+      ansible.builtin.command: supervisorctl start haproxy
+      when: haproxy_restart.rc != 0
+      changed_when: true

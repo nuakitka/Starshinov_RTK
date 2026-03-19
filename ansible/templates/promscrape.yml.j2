@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: loadbalancers-haproxy
+    static_configs:
+      - targets:
+          - lb1:{{ haproxy_metrics_port }}
+          - lb2:{{ haproxy_metrics_port }}
+
+  - job_name: node-exporters
+    static_configs:
+      - targets:
+          - lb1:9100
+          - lb2:9100
+          - backend1:9100
+          - backend2:9100

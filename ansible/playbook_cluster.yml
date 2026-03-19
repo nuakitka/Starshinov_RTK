@@ -1,0 +1,53 @@
+---
+- name: Configure keepalived cluster for load balancers
+  hosts: loadbalancers
+  become: true
+  tasks:
+    - name: Install keepalived
+      ansible.builtin.apt:
+        name: keepalived
+        state: present
+        update_cache: true
+
+    - name: Deploy haproxy health-check script
+      ansible.builtin.template:
+        src: templates/check_haproxy.sh.j2
+        dest: /usr/local/bin/check_haproxy.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy keepalived config
+      ansible.builtin.template:
+        src: templates/keepalived.conf.j2
+        dest: /etc/keepalived/keepalived.conf
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Configure keepalived under supervisor
+      ansible.builtin.template:
+        src: templates/keepalived-supervisor.conf.j2
+        dest: /etc/supervisor/conf.d/keepalived.conf
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload supervisor after keepalived changes
+      ansible.builtin.command: supervisorctl reread
+      changed_when: false
+
+    - name: Apply keepalived supervisor configuration
+      ansible.builtin.command: supervisorctl update
+      changed_when: false
+
+    - name: Restart keepalived
+      ansible.builtin.command: supervisorctl restart keepalived
+      register: keepalived_restart
+      changed_when: keepalived_restart.rc == 0
+      failed_when: false
+
+    - name: Start keepalived if not yet loaded
+      ansible.builtin.command: supervisorctl start keepalived
+      when: keepalived_restart.rc != 0
+      changed_when: true

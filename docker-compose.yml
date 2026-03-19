@@ -1,0 +1,109 @@
+services:
+  lb1:
+    build:
+      context: .
+      dockerfile: ./lb1/Dockerfile
+    container_name: lb1
+    hostname: lb1
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+    networks:
+      ha_net:
+        ipv4_address: 172.30.0.11
+
+  lb2:
+    build:
+      context: .
+      dockerfile: ./lb2/Dockerfile
+    container_name: lb2
+    hostname: lb2
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+    networks:
+      ha_net:
+        ipv4_address: 172.30.0.12
+
+  backend1:
+    build:
+      context: .
+      dockerfile: ./backend1/Dockerfile
+    container_name: backend1
+    hostname: backend1
+    networks:
+      ha_net:
+        ipv4_address: 172.30.0.21
+
+  backend2:
+    build:
+      context: .
+      dockerfile: ./backend2/Dockerfile
+    container_name: backend2
+    hostname: backend2
+    networks:
+      ha_net:
+        ipv4_address: 172.30.0.22
+
+  ansible:
+    build:
+      context: ./ansible
+    container_name: ansible
+    hostname: ansible
+    volumes:
+      - ./ansible:/ansible
+      - ./monitoring:/monitoring
+      - ./ssh:/ssh:ro
+    working_dir: /ansible
+    tty: true
+    stdin_open: true
+    command:
+      - /bin/sh
+      - -c
+      - install -m 600 /ssh/ansible_key /tmp/ansible_key && exec sleep infinity
+    networks:
+      ha_net:
+        ipv4_address: 172.30.0.30
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.138.0
+    container_name: victoriametrics
+    hostname: victoriametrics
+    command:
+      - "--storageDataPath=/victoria-metrics-data"
+      - "--httpListenAddr=:8428"
+      - "--promscrape.config=/etc/victoria-metrics/promscrape.yml"
+      - "--promscrape.configCheckInterval=30s"
+    volumes:
+      - ./monitoring/victoriametrics/promscrape.yml:/etc/victoria-metrics/promscrape.yml
+      - ./monitoring/victoriametrics/data:/victoria-metrics-data
+    ports:
+      - "8428:8428"
+    networks:
+      ha_net:
+        ipv4_address: 172.30.0.40
+
+  grafana:
+    image: grafana/grafana-oss:12.4.1
+    container_name: grafana
+    hostname: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      ha_net:
+        ipv4_address: 172.30.0.41
+
+networks:
+  ha_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
