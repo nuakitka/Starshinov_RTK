@@ -71,6 +71,7 @@ services:
     image: victoriametrics/victoria-metrics:v1.138.0
     container_name: victoriametrics
     hostname: victoriametrics
+    restart: unless-stopped
     command:
       - "--storageDataPath=/victoria-metrics-data"
       - "--httpListenAddr=:8428"
@@ -78,7 +79,7 @@ services:
       - "--promscrape.configCheckInterval=30s"
     volumes:
       - ./monitoring/victoriametrics/promscrape.yml:/etc/victoria-metrics/promscrape.yml
-      - ./monitoring/victoriametrics/data:/victoria-metrics-data
+      - victoriametrics_data:/victoria-metrics-data
     ports:
       - "8428:8428"
     networks:
@@ -89,17 +90,22 @@ services:
     image: grafana/grafana-oss:12.4.1
     container_name: grafana
     hostname: grafana
+    restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
-      - ./monitoring/grafana/data:/var/lib/grafana
+      - grafana_data:/var/lib/grafana
     ports:
       - "3000:3000"
     networks:
       ha_net:
         ipv4_address: 172.30.0.41
+
+volumes:
+  grafana_data:
+  victoriametrics_data:
 
 networks:
   ha_net:

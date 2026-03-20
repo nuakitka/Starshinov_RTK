@@ -5,8 +5,8 @@
   gather_facts: false
   vars:
     grafana_url: http://grafana:3000
-    grafana_user: admin
-    grafana_password: admin
+    grafana_user: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_USER') | default('admin', true) }}"
+    grafana_password: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') | default('admin', true) }}"
     victoria_metrics_url: http://victoriametrics:8428
   tasks:
     - name: Render VictoriaMetrics scrape config
@@ -25,19 +25,44 @@
       delay: 3
       until: vm_health.status == 200
 
-    - name: Wait for Grafana login page
+    - name: Wait for Grafana API health
       ansible.builtin.uri:
-        url: "{{ grafana_url }}/login"
+        url: "{{ grafana_url }}/api/health"
         method: GET
         status_code: 200
       register: grafana_login
-      retries: 30
+      retries: 60
       delay: 3
       until: grafana_login.status == 200
 
     - name: Give Grafana a moment to finish startup migrations
       ansible.builtin.pause:
         seconds: 10
+
+    - name: Check Grafana admin credentials
+      ansible.builtin.uri:
+        url: "{{ grafana_url }}/api/user"
+        method: GET
+        user: "{{ grafana_user }}"
+        password: "{{ grafana_password }}"
+        force_basic_auth: true
+        status_code:
+          - 200
+          - 401
+      register: grafana_auth_check
+
+    - name: Stop with guidance when Grafana password doesn't match
+      ansible.builtin.fail:
+        msg: >-
+          Grafana is running, but credentials {{ grafana_user }}/*** are invalid.
+          This usually means Grafana already has an existing database in its Docker volume,
+          and the initial password from docker-compose is no longer applied.
+          Either rerun this playbook with the real password, for example:
+          GRAFANA_ADMIN_PASSWORD='your_password' ansible-playbook playbook_monitoring.yml
+          or reset monitoring state with:
+          docker compose down -v
+          docker compose up -d --build
+      when: grafana_auth_check.status == 401
 
     - name: Check whether VictoriaMetrics datasource already exists
       ansible.builtin.uri:
