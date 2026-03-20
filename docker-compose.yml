@@ -79,7 +79,7 @@ services:
       - "--promscrape.configCheckInterval=30s"
     volumes:
       - ./monitoring/victoriametrics/promscrape.yml:/etc/victoria-metrics/promscrape.yml
-      - victoriametrics_data:/victoria-metrics-data
+      - ./monitoring/victoriametrics_data:/victoria-metrics-data
     ports:
       - "8428:8428"
     networks:
