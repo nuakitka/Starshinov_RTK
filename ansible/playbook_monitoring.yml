@@ -29,11 +29,6 @@
             dockerenv_stat.stat.exists
             | ternary('/monitoring', (playbook_dir ~ '/../monitoring'))
           }}
-        volumes_root: >-
-          {{
-            dockerenv_stat.stat.exists
-            | ternary('/volumes', (playbook_dir ~ '/../volumes'))
-          }}
         victoria_metrics_config_path: >-
           {{
             dockerenv_stat.stat.exists
@@ -53,32 +48,6 @@
       loop:
         - "{{ monitoring_root }}"
         - "{{ monitoring_root }}/victoriametrics"
-        - "{{ volumes_root }}"
-        - "{{ volumes_root }}/victoriametrics"
-        - "{{ volumes_root }}/victoriametrics/data"
-        - "{{ volumes_root }}/grafana"
-        - "{{ volumes_root }}/grafana/data"
-
-    - name: Ensure service volume directories use service-specific owners
-      ansible.builtin.file:
-        path: "{{ item.path }}"
-        state: directory
-        owner: "{{ item.owner }}"
-        group: "{{ item.group }}"
-        mode: "0755"
-      loop:
-        - path: "{{ volumes_root }}/victoriametrics"
-          owner: "0"
-          group: "0"
-        - path: "{{ volumes_root }}/victoriametrics/data"
-          owner: "0"
-          group: "0"
-        - path: "{{ volumes_root }}/grafana"
-          owner: "472"
-          group: "472"
-        - path: "{{ volumes_root }}/grafana/data"
-          owner: "472"
-          group: "472"
 
     - name: Ensure VictoriaMetrics config path isn't a directory
       ansible.builtin.stat:
