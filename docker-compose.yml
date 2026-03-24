@@ -1,4 +1,15 @@
 services:
+  init-grafana-volume:
+    image: alpine:3.22
+    container_name: init-grafana-volume
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -c
+      - mkdir -p /data /data/plugins && chown -R 472:0 /data && chmod -R 0700 /data
+    volumes:
+      - ./volumes/grafana/data:/data
+
   lb1:
     build:
       context: .
@@ -91,6 +102,9 @@ services:
     container_name: grafana
     hostname: grafana
     restart: unless-stopped
+    depends_on:
+      init-grafana-volume:
+        condition: service_completed_successfully
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
