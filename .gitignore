@@ -3,5 +3,8 @@ monitoring/grafana/data/*
 monitoring/victoriametrics/data/*
 !monitoring/victoriametrics/data/.gitkeep
 monitoring/victoriametrics_data/
-volumes/
+volumes/grafana/data/*
+!volumes/grafana/data/.gitkeep
+volumes/victoriametrics/data/*
+!volumes/victoriametrics/data/.gitkeep
 .DS_Store

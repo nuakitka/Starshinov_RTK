@@ -79,7 +79,7 @@ services:
       - "--promscrape.configCheckInterval=30s"
     volumes:
       - ./monitoring/victoriametrics/promscrape.yml:/etc/victoria-metrics/promscrape.yml
-      - victoriametrics_data:/victoria-metrics-data
+      - ./volumes/victoriametrics/data:/victoria-metrics-data
     ports:
       - "8428:8428"
     networks:
@@ -96,16 +96,12 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
-      - grafana_data:/var/lib/grafana
+      - ./volumes/grafana/data:/var/lib/grafana
     ports:
       - "3000:3000"
     networks:
       ha_net:
         ipv4_address: 172.30.0.41
-
-volumes:
-  grafana_data:
-  victoriametrics_data:
 
 networks:
   ha_net:
