@@ -1,4 +1,26 @@
 services:
+  init-victoriametrics-volume:
+    image: alpine:3.22
+    container_name: init-victoriametrics-volume
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -c
+      - mkdir -p /data && chown -R 0:0 /data
+    volumes:
+      - ./volumes/victoriametrics/data:/data
+
+  init-grafana-volume:
+    image: alpine:3.22
+    container_name: init-grafana-volume
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -c
+      - mkdir -p /data /data/plugins && chown -R 472:472 /data
+    volumes:
+      - ./volumes/grafana/data:/data
+
   lb1:
     build:
       context: .
@@ -55,6 +77,7 @@ services:
     volumes:
       - ./ansible:/ansible
       - ./monitoring:/monitoring
+      - ./volumes:/volumes
       - ./ssh:/ssh:ro
     working_dir: /ansible
     tty: true
@@ -72,6 +95,9 @@ services:
     container_name: victoriametrics
     hostname: victoriametrics
     restart: unless-stopped
+    depends_on:
+      init-victoriametrics-volume:
+        condition: service_completed_successfully
     command:
       - "--storageDataPath=/victoria-metrics-data"
       - "--httpListenAddr=:8428"
@@ -79,7 +105,7 @@ services:
       - "--promscrape.configCheckInterval=30s"
     volumes:
       - ./monitoring/victoriametrics/promscrape.yml:/etc/victoria-metrics/promscrape.yml
-      - ./monitoring/victoriametrics_data:/victoria-metrics-data
+      - ./volumes/victoriametrics/data:/victoria-metrics-data
     ports:
       - "8428:8428"
     networks:
@@ -91,21 +117,20 @@ services:
     container_name: grafana
     hostname: grafana
     restart: unless-stopped
-    user: "${GRAFANA_UID:-472}:${GRAFANA_GID:-472}"
+    depends_on:
+      init-grafana-volume:
+        condition: service_completed_successfully
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
-      - ./monitoring/grafana/data:/var/lib/grafana
+      - ./volumes/grafana/data:/var/lib/grafana
     ports:
       - "3000:3000"
     networks:
       ha_net:
         ipv4_address: 172.30.0.41
-
-volumes:
-  victoriametrics_data:
 
 networks:
   ha_net:

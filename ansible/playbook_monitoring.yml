@@ -4,15 +4,98 @@
   connection: local
   gather_facts: false
   vars:
-    grafana_url: http://grafana:3000
     grafana_user: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_USER') | default('admin', true) }}"
     grafana_password: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') | default('admin', true) }}"
-    victoria_metrics_url: http://victoriametrics:8428
   tasks:
+    - name: Detect whether playbook runs inside a container
+      ansible.builtin.stat:
+        path: /.dockerenv
+      register: dockerenv_stat
+
+    - name: Set monitoring endpoints for current runtime
+      ansible.builtin.set_fact:
+        grafana_url: >-
+          {{
+            lookup('ansible.builtin.env', 'GRAFANA_URL')
+            | default((dockerenv_stat.stat.exists | ternary('http://grafana:3000', 'http://localhost:3000')), true)
+          }}
+        victoria_metrics_url: >-
+          {{
+            lookup('ansible.builtin.env', 'VICTORIA_METRICS_URL')
+            | default((dockerenv_stat.stat.exists | ternary('http://victoriametrics:8428', 'http://localhost:8428')), true)
+          }}
+        monitoring_root: >-
+          {{
+            dockerenv_stat.stat.exists
+            | ternary('/monitoring', (playbook_dir ~ '/../monitoring'))
+          }}
+        volumes_root: >-
+          {{
+            dockerenv_stat.stat.exists
+            | ternary('/volumes', (playbook_dir ~ '/../volumes'))
+          }}
+        victoria_metrics_config_path: >-
+          {{
+            dockerenv_stat.stat.exists
+            | ternary('/monitoring/victoriametrics/promscrape.yml', (playbook_dir ~ '/../monitoring/victoriametrics/promscrape.yml'))
+          }}
+        dashboard_json_path: >-
+          {{
+            dockerenv_stat.stat.exists
+            | ternary('/ansible/files/grafana-dashboard.json', (playbook_dir ~ '/files/grafana-dashboard.json'))
+          }}
+
+    - name: Ensure top-level monitoring directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ monitoring_root }}"
+        - "{{ monitoring_root }}/victoriametrics"
+        - "{{ volumes_root }}"
+        - "{{ volumes_root }}/victoriametrics"
+        - "{{ volumes_root }}/victoriametrics/data"
+        - "{{ volumes_root }}/grafana"
+        - "{{ volumes_root }}/grafana/data"
+
+    - name: Ensure service volume directories use service-specific owners
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "0755"
+      loop:
+        - path: "{{ volumes_root }}/victoriametrics"
+          owner: "0"
+          group: "0"
+        - path: "{{ volumes_root }}/victoriametrics/data"
+          owner: "0"
+          group: "0"
+        - path: "{{ volumes_root }}/grafana"
+          owner: "472"
+          group: "472"
+        - path: "{{ volumes_root }}/grafana/data"
+          owner: "472"
+          group: "472"
+
+    - name: Ensure VictoriaMetrics config path isn't a directory
+      ansible.builtin.stat:
+        path: "{{ victoria_metrics_config_path }}"
+      register: victoria_metrics_config_stat
+
+    - name: Stop with guidance when VictoriaMetrics config path is a directory
+      ansible.builtin.fail:
+        msg: >-
+          {{ victoria_metrics_config_path }} is a directory, but VictoriaMetrics expects a file there.
+          Remove that directory and recreate the file, then rerun this playbook.
+      when: victoria_metrics_config_stat.stat.isdir | default(false)
+
     - name: Render VictoriaMetrics scrape config
       ansible.builtin.template:
         src: templates/promscrape.yml.j2
-        dest: /monitoring/victoriametrics/promscrape.yml
+        dest: "{{ victoria_metrics_config_path }}"
         mode: "0644"
 
     - name: Wait for VictoriaMetrics API
@@ -113,7 +196,7 @@
           Content-Type: application/json
         body_format: json
         body:
-          dashboard: "{{ lookup('file', '/ansible/files/grafana-dashboard.json') | from_json }}"
+          dashboard: "{{ lookup('file', dashboard_json_path) | from_json }}"
           folderId: 0
           overwrite: true
         status_code: 200
